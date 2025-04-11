@@ -2,7 +2,7 @@ const connection = require('../../database')
 
 exports.tofindEvents = async (req,res) => {
 
-    sql = 'SELECT * FROM eventos'
+    let sql = 'SELECT * FROM eventos'
 
     try {
         connection.query(sql, (err,result) => {

@@ -1,20 +1,20 @@
 const connection = require('../../database')
 
 exports.dropdownviajes = async (req, res) =>{
-    try {
+    try { 
         const sql = 'SELECT ID, PLACA, TIPO FROM maestro_vehiculo'
         const sql2 = 'SELECT * FROM sedes'
         const sql3 = 'SELECT * FROM personal'
         connection.query(sql, (error, resul) => {
-          if(error){
+          if (error) {
             throw error
           }
           connection.query(sql2, (error, result)=> {
-            if(error){
+            if (error) {
               throw error
             }
             connection.query(sql3, (error, resultado)=> {
-              if(error){
+              if (error) {
                 throw error
               }
               res.status(200).json({

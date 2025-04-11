@@ -1,5 +1,42 @@
 const connection = require('../../database')
 
+exports.validarviaje = async (req, res, next) => {
+    if (req.body.Viaje_Asoc !== '' && req.body.Viaje_Asoc !== null) {
+        let sql = `SELECT * FROM viajes v, status_viaje s WHERE v.Viaje_Asoc = '${req.body.Viaje_Asoc}' AND s.id = v.id_Status
+        AND (s.status = 'PENDIENTE' OR s.status = 'EN PROCESO')`
+        let array = req.body.Viaje_Asoc.split('-', 2)
+        let idAsoc = Number(array[1])
+        let sql2 = `SELECT * FROM viajes WHERE id_Viaje = ${idAsoc}`
+        connection.query(sql, (error,resultado) => {
+            if (error) {
+                throw error
+            } else {
+                if (resultado.length !== 0) {
+                    return res.json({ message: "YA EXISTE" })
+                } else {
+                    connection.query(sql2, (erro, resul) => {
+                        if (erro) {
+                            throw erro
+                        } else {
+                            if (resul.length !== 0) {
+                                if (resul[0].id_Vehiculo === req.body.id_Vehiculo) {
+                                    next()
+                                } else {
+                                    return res.json({ message: 'PLACAS DIFERENTES' })
+                                }
+                            } else {
+                                return res.json({ message: 'NO EXISTE VIAJE ASOCIADO' })
+                            }
+                        }
+                    })
+                }
+            }
+        })
+    } else {
+        next()
+    }
+}
+
 exports.aggViaje = async (req, res, next) => {
     try {
         const sql = 'INSERT INTO viajes SET ?'
@@ -11,20 +48,20 @@ exports.aggViaje = async (req, res, next) => {
             id_Status: req.body.id_Status,
             carga: req.body.carga,
             detalle: req.body.detalle,
-            cantidad: req.body.cantidad
+            cantidad: req.body.cantidad,
+            Viaje_Asoc: req.body.Viaje_Asoc
         }
 
         if(body){
-            connection.query(sql, body, (error, result) =>{
-            if(error) {
+            connection.query(sql, body, (error, result) => {
+            if (error) {
                 return res.json(result).status(400)
-            }else{
-             next()
+            } else {
+                next()
             }
           })
         }
     } catch (error) {
-        console.log(error)
         return res.status(500)
     }
 }
@@ -45,7 +82,7 @@ exports.aggDetalleEvento = async (req, res) => {
               fechaCarga = divfecha[2] +'-'+ divfecha[1] +'-0'+ divfecha[0] +' '+ array[1]
             }
             if (divfecha[0] > 9 && divfecha[1] <= 9) {
-              fechaCarga = divfecha[2] +'-0'+ divfecha[1] + '-'+divfecha[0] +' '+ array[1]
+              fechaCarga = divfecha[2] +'-0'+ divfecha[1] + '-'+ divfecha[0] +' '+ array[1]
             }
             if (divfecha[0] > 9 && divfecha[1] > 9) {
               fechaCarga = divfecha[2] +'-'+ divfecha[1] +'-'+ divfecha[0] +' '+ array[1]

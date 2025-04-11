@@ -27,7 +27,7 @@ router.get('/vehiculos',(req,res)=>{
     });
 });
 
-router.get('/vehiculo/:id',(req,res)=>{
+router.get('/vehiculo/:id',(req,res) => {
     const id = req.params.id
     const sql = `SELECT *
      FROM maestro_vehiculo v 
@@ -44,17 +44,17 @@ router.get('/vehiculo/:id',(req,res)=>{
      WHERE v.placa = '${id}'
      GROUP BY k.kilometraje 
      ORDER BY k.kilometraje desc limit 1 `;
-    connection.query(sql,(error, result)=>{
-        if(error) {
-            const response = {message: 'Error!', data: {error} }
+    connection.query(sql,(error, result) => {
+        if (error) {
+            const response = { message: 'Error!', data: {error} }
             res.status(500)
             res.json(response)
         } 
-        if (result.length>0){
-            const response = {message: 'Exito!', data: result[0]}
+        if ( result.length > 0 ) {
+            const response = { message: 'Exito!', data: result[0] }
             res.status(200)
             res.json(response);
-        }else {
+        } else {
             res.status(204)
             res.json({message: 'sin resultados!', data:[] });
         }

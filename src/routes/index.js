@@ -2,7 +2,7 @@
 // Middlewares
 const multer = require ('multer')
 
-const { Router } = require ('express');
+const { Router, query } = require ('express');
 const router = Router(); 
 
 const connection = require ('../database')
@@ -29,17 +29,19 @@ var storage = multer.diskStorage({
 
 // all customers 
 router.get('/vehiculos',(req,res)=>{
-    const sql = `SELECT @numero:=@numero + 1 AS posicion, v.* , m.*, st.status, o.*
+    const sql = `SELECT @numero:=@numero + 1 AS posicion, v.* , m.*, st.status, o.*, e.empresa
     FROM maestro_vehiculo v 
     INNER JOIN marca m 
     INNER JOIN status st 
+    INNER JOIN empresas e 
     INNER JOIN operatividad o
     ON v.id_marca = m.id 
     AND v.id_operatividad = o.id
+    AND v.id_empresa = e.id
     AND o.id_status=st.id, (SELECT @numero:= 0) AS s;`;
     connection.query(sql,(error, results)=>{
        if(error) throw error;
-       if (results.length>0){
+       if (results.length > 0) {
            res.json(results);
        }else {
            res.send ('Not results');
@@ -64,17 +66,26 @@ router.get('/vehiculo/:id',(req,res)=>{
      WHERE v.placa = '${id}'
      GROUP BY k.kilometraje 
      ORDER BY k.kilometraje desc limit 1 `;
-    connection.query(sql,(error, result)=>{
-        if(error) {
-            const response = {message: 'Error!', data: {error} }
+    connection.query(sql, (error, result) => {
+        if (error) {
+            const response = { message: 'Error!', data: {error} }
             res.status(500)
             res.json(response)
         } 
-        if (result.length>0){
-            const response = {message: 'Exito!', data: result[0]}
-            res.status(200)
-            res.json(response);
-        }else {
+        if (result.length > 0) {
+            const sqlEmpresa = `SELECT id, empresa FROM empresas`
+            connection.query(sqlEmpresa, (erro, resultado) => {
+                if (erro) {
+                    const response = { message: 'Error!', data: {erro} }
+                    res.status(500)
+                    res.json(response)
+                } else {
+                    const response = { message: 'Exito!', data: result[0], empresas: resultado }
+                    res.status(200)
+                    res.json(response);
+                }
+            })
+        } else {
             res.status(204)
             res.json({message: 'sin resultados!', data:[] });
         }
@@ -84,15 +95,17 @@ router.get('/vehiculo/:id',(req,res)=>{
 
 router.get('/kilometraje/:id',(req,res)=>{
     const {id} = req.params
-    const sql = `SELECT k.kilometraje AS km, DATE_FORMAT(k.fecha,"%d-%m-%Y") as fecha, k.id as id_km, v.* ,v.id as id_v , m.* , s.*,t.*,DATE_FORMAT(o.fecha,"%d-%m-%Y") as fstatus, o.id as id_ultimo_s,s.id as id_status
+    const sql = `SELECT k.kilometraje AS km, DATE_FORMAT(k.fecha,"%d-%m-%Y") as fecha, k.id as id_km, v.* ,v.id as id_v , m.* , s.*,t.*,DATE_FORMAT(o.fecha,"%d-%m-%Y") as fstatus, o.id as id_ultimo_s,s.id as id_status, e.empresa
      FROM maestro_vehiculo v 
      INNER JOIN kilometraje k 
      INNER JOIN marca m 
      INNER JOIN status s 
+     INNER JOIN empresas e 
      INNER JOIN tipos_de_carga t 
      INNER JOIN operatividad o
      ON v.id_marca = m.id 
      AND v.id_tipo_carga = t.id 
+     AND v.id_empresa = e.id 
      AND v.id_operatividad = o.id 
      AND o.id_status = s.id
      AND k.id_vehiculo = v.id 
@@ -149,10 +162,11 @@ router.post('/add', (req,res)=>{
             });
         }
 
-        function insertarM (id_operatividad){
+        function insertarM (id_operatividad) {
             const sql = 'INSERT INTO maestro_vehiculo set ?';
 
             const customerObj = {
+                id_empresa: req.body.empresa,
                 placa: req.body.placa,
                 id_marca: req.body.id_marca,
                 modelo: req.body.modelo,
@@ -178,7 +192,7 @@ router.post('/add', (req,res)=>{
                 id_operatividad: id_operatividad
             }
 
-            connection.query (sql, customerObj, (error, result)=> {
+            connection.query (sql, customerObj, (error, result) => {
                 if(error) {
                     throw error;
                 }
@@ -297,10 +311,11 @@ router.put('/updatecar/:placa', (req, res) => {
             color: req.body.color,
             responsable: req.body.responsable,
             tipo_transporte: req.body.tipo_transporte,
-            ano: req.body.ano
+            ano: req.body.ano,
+            id_empresa: req.body.id_empresa
         }
 
-        connection.query (sql, customerObj, (error, result)=> {
+        connection.query (sql, customerObj, (error, result) => {
             if(error) {
                 throw error;
             }
@@ -671,12 +686,15 @@ router.get('/getHistorico/',(req,res)=>{
 });
 
 router.get('/getStatusPeriodo/',(req,res)=>{
+    /* YEISON */
     const hasta = req.query.hasta
-     const sql = `SELECT s.*, m.placa, m.modelo, m.id_tipo_carga, DATE_FORMAT(o.fecha,"%d-%m-%Y") as fecha1, o.detalles
+     const sql = `SELECT s.*, e.empresa, m.placa, m.modelo, m.id_tipo_carga, DATE_FORMAT(o.fecha,"%d-%m-%Y") as fecha1, o.detalles
      FROM operatividad o 
      INNER JOIN status s
      INNER JOIN maestro_vehiculo m
+     INNER JOIN empresas e
      ON o.id_status = s.id
+     AND e.id = m.id_empresa
      AND o.placa = m.placa
      INNER JOIN (
          SELECT MAX(id) max_id
@@ -705,7 +723,7 @@ router.get('/getStatusPeriodo/',(req,res)=>{
 router.get('/getMtto/:nro',(req,res)=>{
     const {nro} = req.params
     const sql = `SELECT m . * , d . * , p . * , s . * , t . * , k.kilometraje , v.*, sp.status_pago, sp.id as id_p, sm.status_mtto, p.id as id_pro, m.fecha, m.fecha_sol,
-     DATE_FORMAT(m.fecha,"%d-%m-%Y") as fecha_f,DATE_FORMAT(m.fecha_sol,"%d-%m-%Y") as fecha_sol_f
+     DATE_FORMAT(m.fecha,"%d-%m-%Y") as fecha_f,DATE_FORMAT(m.fecha_sol,"%d-%m-%Y") as fecha_sol_f, e.empresa
      FROM mantenimiento m 
      INNER JOIN detalle_mttos d 
      INNER JOIN maestro_servicio s
@@ -713,10 +731,12 @@ router.get('/getMtto/:nro',(req,res)=>{
      INNER JOIN tipo_mtto t
      INNER JOIN kilometraje k
      INNER JOIN maestro_vehiculo v
+     INNER JOIN empresas e
      INNER JOIN status_pago sp
      INNER JOIN status_mtto sm
      ON m.id=d.id_mtto
      AND d.id_servicio=s.id
+     AND v.id_empresa=e.id
      AND m.id_proveedor=p.id
      AND m.id_tipo=t.id
      AND m.id_kilometro=k.id
@@ -823,9 +843,10 @@ router.put('/actualizarmtto', (req,res)=>{
 });
 
 
-//########################################### AGENDA MAESTRA DE CARGA ##################################
+//########################################### AGENDA MAESTRA DE CARGA  ##################################
 
 const controladorAddViajes = require('./controllers/AddViajes')
+const controladorFindEmpresas = require('./controllers/nuevasempresas')
 const controladorAddCentros = require('./controllers/AddCentros')
 const controladorViajes = require('./controllers/Viajes')
 const controladorInfoViajes = require('./controllers/InfoViajes')
@@ -838,22 +859,25 @@ const controladoreventos = require('./controllers/FindEventos')
 const controladorDeteventos = require('./controllers/GetDetEventos')
 const controladordetalles = require('./controllers/WorkDetalles')
 const controladorputdetalles = require('./controllers/modifyDetEvent')
+const controladorputdetalleasoc = require('./controllers/modifyDetEventAsoc')
 
 
 router.get('/amc/viajes', controladorViajes.obtener)
+router.get('/new/empresas', controladorFindEmpresas.tofindEnterprise)
 router.get('/amc/allevents', controladoreventos.tofindEvents)
 router.get('/amc/allstatus', controladorstatus.getStatus)
 router.get('/amc/buscarviaje/:id_Viaje', controladormodificar.buscarviaje)
 router.get('/amc/tofindviaje/:placa', controladorfindviaje.buscarviajeplaca)
 router.get('/amc/getdetallesviaje/:id', controladorDeteventos.alldetalles)
 router.get('/amc/dropdownviajes', controladorInfoViajes.dropdownviajes)
-router.post('/amc/registrar', [controladorAddViajes.aggViaje, controladorAddViajes.aggDetalleEvento])
+router.post('/amc/registrar', [controladorAddViajes.validarviaje, controladorAddViajes.aggViaje, controladorAddViajes.aggDetalleEvento])
 router.post('/amc/login', controladorlogin.login)
 router.post('/amc/registrar/centros', controladorAddCentros.addCentro)
 router.put('/amc/anular/:viaje', controladoranular.anulacion)
 router.put('/amc/cancelar/:viaje', controladoranular.cancelarviaje)
-router.put('/amc/editarviaje/:viaje', controladormodificar.modify)
+router.put('/amc/editarviaje/:viaje', [controladormodificar.verificarviaje, controladormodificar.modify])
 router.put('/amc/putdetalleevento/:idDet', [controladorputdetalles.verificar, controladorputdetalles.edit])
+router.put('/amc/putdetalleeventoasociado/:idViaje', [controladorputdetalleasoc.verificar, controladorputdetalleasoc.edit])
 router.post('/amc/registrardetalleevento', [controladordetalles.verificareventoOrigen,controladordetalles.addfecha])
 
 module.exports = router; 

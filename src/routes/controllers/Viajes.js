@@ -15,8 +15,8 @@ exports.obtener = async (req, res) => {
         const sql2 = `SELECT DISTINCT s . * FROM sedes s INNER JOIN viajes v
         ON (v.id_SedeOrigen = s.id OR v.id_SedeDestino = s.id)`
         
-        const sql3 = `SELECT DISTINCT dv.fchhoraestimada_Llegada, dv.id_Evento, dv.id_Viaje FROM detalle_evento dv INNER JOIN viajes v
-          ON dv.id_Viaje = v.id_Viaje AND (dv.id_Evento = 2 OR dv.id_Evento = 3)`
+        const sql3 = `SELECT DISTINCT dv . * FROM detalle_evento dv INNER JOIN viajes v
+        ON dv.id_Viaje = v.id_Viaje AND (dv.id_Evento = 2 OR dv.id_Evento = 3)`
         connection.query(sql, (error, result) => {
           if (error) {
             throw error
